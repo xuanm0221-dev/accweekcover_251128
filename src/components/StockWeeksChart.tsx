@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -68,6 +68,9 @@ const CHANNEL_LABELS: Record<ChannelTab, string> = {
   창고: "창고",
 };
 
+// 상품 타입 탭 타입
+type ProductTypeTab = "전체" | "주력" | "아울렛";
+
 export default function StockWeeksChart({
   selectedTab,
   inventoryData,
@@ -79,6 +82,9 @@ export default function StockWeeksChart({
   allSalesData,
   channelTab,
 }: StockWeeksChartProps) {
+  // 상품 타입 탭 상태
+  const [productTypeTab, setProductTypeTab] = useState<ProductTypeTab>("전체");
+
   // 주수 계산 함수
   const calculateWeeks = (inventory: number, sales: number, days: number): number | null => {
     if (sales === 0 || days === 0) return null;
@@ -138,7 +144,7 @@ export default function StockWeeksChart({
     }
   };
 
-  // 단일 아이템 차트 데이터 생성 (실선: 합계, 점선: 대리상)
+  // 단일 아이템 차트 데이터 생성 (상품 타입 탭에 따라 계산)
   const singleItemChartData = useMemo(() => {
     return MONTHS_2025.map((month) => {
       const invData = inventoryData[month];
@@ -153,14 +159,41 @@ export default function StockWeeksChart({
         };
       }
 
-      // 실선: 합계 기준 (전체_core + 전체_outlet)
-      const totalStock = (invData.전체_core || 0) + (invData.전체_outlet || 0);
-      const totalSales = (slsData.전체_core || 0) + (slsData.전체_outlet || 0);
+      let totalStock: number;
+      let totalSales: number;
+      let frsStock: number;
+      let frsSales: number;
+
+      // 상품 타입 탭에 따라 계산
+      switch (productTypeTab) {
+        case "주력":
+          // 주력상품: core만 사용
+          totalStock = invData.전체_core || 0;
+          totalSales = slsData.전체_core || 0;
+          frsStock = invData.FRS_core || 0;
+          frsSales = slsData.FRS_core || 0;
+          break;
+        case "아울렛":
+          // 아울렛상품: outlet만 사용
+          totalStock = invData.전체_outlet || 0;
+          totalSales = slsData.전체_outlet || 0;
+          frsStock = invData.FRS_outlet || 0;
+          frsSales = slsData.FRS_outlet || 0;
+          break;
+        case "전체":
+        default:
+          // 상품전체: core + outlet
+          totalStock = (invData.전체_core || 0) + (invData.전체_outlet || 0);
+          totalSales = (slsData.전체_core || 0) + (slsData.전체_outlet || 0);
+          frsStock = (invData.FRS_core || 0) + (invData.FRS_outlet || 0);
+          frsSales = (slsData.FRS_core || 0) + (slsData.FRS_outlet || 0);
+          break;
+      }
+
+      // 실선: 합계 기준
       const weeksTotal = calculateWeeks(totalStock, totalSales, days);
 
-      // 점선: 대리상 기준 (FRS_core + FRS_outlet)
-      const frsStock = (invData.FRS_core || 0) + (invData.FRS_outlet || 0);
-      const frsSales = (slsData.FRS_core || 0) + (slsData.FRS_outlet || 0);
+      // 점선: 대리상 기준
       const weeksFRS = calculateWeeks(frsStock, frsSales, days);
 
       return {
@@ -169,9 +202,9 @@ export default function StockWeeksChart({
         대리상: weeksFRS !== null ? parseFloat(weeksFRS.toFixed(1)) : null,
       };
     });
-  }, [inventoryData, salesData, daysInMonth]);
+  }, [inventoryData, salesData, daysInMonth, productTypeTab]);
 
-  // 모든 아이템 차트 데이터 생성 (실선: 합계, 점선: 대리상)
+  // 모든 아이템 차트 데이터 생성 (상품 타입 탭에 따라 계산)
   const allItemsChartData = useMemo(() => {
     if (!showAllItems || !allInventoryData || !allSalesData) return [];
 
@@ -191,22 +224,49 @@ export default function StockWeeksChart({
           return;
         }
 
-        // 실선: 합계 기준 (전체_core + 전체_outlet)
-        const totalStock = (invData.전체_core || 0) + (invData.전체_outlet || 0);
-        const totalSales = (slsData.전체_core || 0) + (slsData.전체_outlet || 0);
+        let totalStock: number;
+        let totalSales: number;
+        let frsStock: number;
+        let frsSales: number;
+
+        // 상품 타입 탭에 따라 계산
+        switch (productTypeTab) {
+          case "주력":
+            // 주력상품: core만 사용
+            totalStock = invData.전체_core || 0;
+            totalSales = slsData.전체_core || 0;
+            frsStock = invData.FRS_core || 0;
+            frsSales = slsData.FRS_core || 0;
+            break;
+          case "아울렛":
+            // 아울렛상품: outlet만 사용
+            totalStock = invData.전체_outlet || 0;
+            totalSales = slsData.전체_outlet || 0;
+            frsStock = invData.FRS_outlet || 0;
+            frsSales = slsData.FRS_outlet || 0;
+            break;
+          case "전체":
+          default:
+            // 상품전체: core + outlet
+            totalStock = (invData.전체_core || 0) + (invData.전체_outlet || 0);
+            totalSales = (slsData.전체_core || 0) + (slsData.전체_outlet || 0);
+            frsStock = (invData.FRS_core || 0) + (invData.FRS_outlet || 0);
+            frsSales = (slsData.FRS_core || 0) + (slsData.FRS_outlet || 0);
+            break;
+        }
+
+        // 실선: 합계 기준
         const weeksTotal = calculateWeeks(totalStock, totalSales, days);
         dataPoint[`${ITEM_LABELS[itemTab]}_합계`] = weeksTotal !== null ? parseFloat(weeksTotal.toFixed(1)) : null;
 
-        // 점선: 대리상 기준 (FRS_core + FRS_outlet)
-        const frsStock = (invData.FRS_core || 0) + (invData.FRS_outlet || 0);
-        const frsSales = (slsData.FRS_core || 0) + (slsData.FRS_outlet || 0);
+        // 점선: 대리상 기준
         const weeksFRS = calculateWeeks(frsStock, frsSales, days);
         dataPoint[`${ITEM_LABELS[itemTab]}_대리상`] = weeksFRS !== null ? parseFloat(weeksFRS.toFixed(1)) : null;
       });
 
       return dataPoint;
     });
-  }, [showAllItems, allInventoryData, allSalesData, daysInMonth]);
+  }, [showAllItems, allInventoryData, allSalesData, daysInMonth, productTypeTab]);
 
   const colors = ITEM_COLORS[selectedTab];
   const itemLabel = ITEM_LABELS[selectedTab];
@@ -219,10 +279,45 @@ export default function StockWeeksChart({
       <div className="card mb-4">
         {/* 헤더 */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <span className="text-purple-500">📈</span>
-            2025년 월별 재고주수 추이 (전체 아이템 비교)
-          </h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <span className="text-purple-500">📈</span>
+              2025년 월별 재고주수 추이 (전체 아이템 비교)
+            </h2>
+            {/* 상품 타입 탭 추가 */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setProductTypeTab("전체")}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  productTypeTab === "전체"
+                    ? "bg-sky-100 text-sky-700 border-2 border-sky-300"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                상품전체
+              </button>
+              <button
+                onClick={() => setProductTypeTab("주력")}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  productTypeTab === "주력"
+                    ? "bg-sky-100 text-sky-700 border-2 border-sky-300"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                주력상품
+              </button>
+              <button
+                onClick={() => setProductTypeTab("아울렛")}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  productTypeTab === "아울렛"
+                    ? "bg-sky-100 text-sky-700 border-2 border-sky-300"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                아울렛상품
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* 차트 */}
@@ -337,10 +432,45 @@ export default function StockWeeksChart({
     <div className="card mb-4">
       {/* 헤더 */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <span className="text-purple-500">📈</span>
             2025년 월별 재고주수 추이 ({itemLabel})
           </h2>
+          {/* 상품 타입 탭 추가 */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setProductTypeTab("전체")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                productTypeTab === "전체"
+                  ? "bg-sky-100 text-sky-700 border-2 border-sky-300"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              상품전체
+            </button>
+            <button
+              onClick={() => setProductTypeTab("주력")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                productTypeTab === "주력"
+                  ? "bg-sky-100 text-sky-700 border-2 border-sky-300"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              주력상품
+            </button>
+            <button
+              onClick={() => setProductTypeTab("아울렛")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                productTypeTab === "아울렛"
+                  ? "bg-sky-100 text-sky-700 border-2 border-sky-300"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              아울렛상품
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 차트 */}
