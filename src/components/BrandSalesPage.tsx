@@ -10,7 +10,9 @@ import {
   SalesSummaryData, 
   InventorySummaryData,
   StockWeeksByItem,
-  createDefaultStockWeeks
+  createDefaultStockWeeks,
+  ForecastInventorySummaryData,
+  ForecastInventoryData,
 } from "@/types/sales";
 import Navigation from "./Navigation";
 import ItemTabs from "./ItemTabs";
@@ -23,7 +25,9 @@ import InventoryChart from "./InventoryChart";
 import WarningBanner from "./WarningBanner";
 import StockWeekInput from "./StockWeekInput";
 import CollapsibleSection from "./CollapsibleSection";
+import ForecastInventoryTable from "./ForecastInventoryTable";
 import { generateForecastForBrand } from "@/lib/forecast";
+import { buildInventoryForecastForTab } from "@/lib/inventoryForecast";
 
 interface BrandSalesPageProps {
   brand: Brand;
@@ -40,6 +44,7 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
   const [showAllItemsInChart, setShowAllItemsInChart] = useState(false); // 차트 모두선택 모드
   const [channelTab, setChannelTab] = useState<ChannelTab>("ALL"); // 채널 탭 (ALL, FRS, 창고)
   const [growthRate, setGrowthRate] = useState<number>(105); // 성장률 (기본값 105%)
+  const [forecastInventoryData, setForecastInventoryData] = useState<ForecastInventorySummaryData | null>(null);
   
   // 특정 아이템의 stockWeek 변경 핸들러
   const handleStockWeekChange = (itemTab: ItemTab, value: number) => {
@@ -65,6 +70,19 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
         }
         const inventoryJson: InventorySummaryData = await inventoryResponse.json();
         setInventoryData(inventoryJson);
+
+        // 입고예정 재고자산 데이터 로드 (존재하지 않으면 경고만 출력)
+        try {
+          const forecastRes = await fetch("/api/forecast-inventory");
+          if (forecastRes.ok) {
+            const forecastJson: ForecastInventorySummaryData = await forecastRes.json();
+            setForecastInventoryData(forecastJson);
+          } else {
+            console.warn("입고예정 재고자산 데이터를 불러오는데 실패했습니다.");
+          }
+        } catch (e) {
+          console.warn("입고예정 재고자산 API 호출 중 오류:", e);
+        }
 
         if (salesJson.unexpectedCategories?.length > 0) {
           console.warn(
@@ -102,10 +120,55 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
   const inventoryBrandData: InventoryBrandData | undefined = inventoryData?.brands[brand];
   const inventoryTabData = inventoryBrandData?.[selectedTab];
 
+  const forecastInventoryBrandData: ForecastInventoryData | undefined =
+    forecastInventoryData?.brands[brand];
+  const forecastInventoryMonths: string[] = forecastInventoryData?.months || [];
+
   const allUnexpectedCategories = [
     ...(salesData?.unexpectedCategories || []),
     ...(inventoryData?.unexpectedCategories || [])
   ].filter((v, i, a) => a.indexOf(v) === i);
+
+  // 재고자산 표용: 25.10까지 Actual + 25.11~26.04 Forecast 재고자산
+  const {
+    months: inventoryMonthsWithForecast,
+    data: inventoryTabDataWithForecast,
+  } = useMemo(() => {
+    if (
+      !inventoryData?.months ||
+      !inventoryBrandData ||
+      !salesBrandData
+    ) {
+      return {
+        months: inventoryData?.months || [],
+        data: inventoryTabData || {},
+      };
+    }
+
+    return buildInventoryForecastForTab({
+      itemTab: selectedTab,
+      inventoryBrandData,
+      inventoryMonths: inventoryData.months,
+      salesBrandDataWithForecast: salesBrandData,
+      forecastInventoryBrandData,
+    });
+  }, [
+    selectedTab,
+    inventoryBrandData,
+    inventoryData?.months,
+    salesBrandData,
+    forecastInventoryBrandData,
+    inventoryTabData,
+  ]);
+
+  // 재고자산/재고자산 차트용: 선택된 탭에는 forecast 재고를 반영
+  const inventoryBrandDataForChart: InventoryBrandData | undefined = useMemo(() => {
+    if (!inventoryBrandData) return undefined;
+    return {
+      ...inventoryBrandData,
+      [selectedTab]: inventoryTabDataWithForecast,
+    };
+  }, [inventoryBrandData, inventoryTabDataWithForecast, selectedTab]);
 
   // months 배열에 forecast 월 추가
   const allMonths = useMemo(() => {
@@ -188,10 +251,11 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
             </div>
 
             {/* 1.5. 월별 재고주수 추이 차트 */}
-            {salesTabData && inventoryTabData && inventoryData?.daysInMonth && (
+            {salesTabData && inventoryTabDataWithForecast && inventoryData?.daysInMonth && (
               <StockWeeksChart
                 selectedTab={selectedTab}
-                inventoryData={inventoryTabData}
+                // 25.11~26.04 forecast 재고주수까지 포함
+                inventoryData={inventoryTabDataWithForecast}
                 salesData={salesTabData}
                 daysInMonth={inventoryData.daysInMonth}
                 stockWeek={stockWeeks[selectedTab]}
@@ -203,10 +267,11 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
             )}
 
             {/* 1.6. 월별 재고자산 추이 막대차트 */}
-            {inventoryBrandData && salesBrandData && (
+            {inventoryBrandDataForChart && salesBrandData && (
               <InventoryChart
                 selectedTab={selectedTab}
-                inventoryBrandData={inventoryBrandData}
+                // 선택 탭에는 forecast 재고자산(25.11~26.04) 포함
+                inventoryBrandData={inventoryBrandDataForChart}
                 salesBrandData={salesBrandData}
                 channelTab={channelTab}
                 setChannelTab={setChannelTab}
@@ -221,7 +286,7 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
                   2025년 재고주수
                 </h2>
                 <StockWeeksTable
-                  inventoryData={inventoryTabData}
+                  inventoryData={inventoryTabDataWithForecast}
                   salesData={salesTabData}
                   daysInMonth={inventoryData.daysInMonth}
                   stockWeek={stockWeeks[selectedTab]}
@@ -343,16 +408,57 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
                   </>
                 }
               >
-                {inventoryTabData && inventoryData?.months && inventoryData?.daysInMonth ? (
+                {inventoryTabDataWithForecast &&
+                inventoryMonthsWithForecast.length > 0 &&
+                inventoryData?.daysInMonth ? (
                   <InventoryTable 
-                    data={inventoryTabData} 
-                    months={inventoryData.months}
+                    data={inventoryTabDataWithForecast} 
+                    months={inventoryMonthsWithForecast}
                     daysInMonth={inventoryData.daysInMonth}
                     stockWeek={stockWeeks[selectedTab]}
                   />
                 ) : (
                   <div className="flex items-center justify-center py-10">
                     <p className="text-gray-500">재고 데이터가 없습니다.</p>
+                  </div>
+                )}
+              </CollapsibleSection>
+            </div>
+
+            {/* 6. 입고예정 재고자산 표 (새로 추가) */}
+            <div className="mt-4">
+              <CollapsibleSection
+                title="입고예정 재고자산"
+                icon="📥"
+                iconColor="text-purple-500"
+                defaultOpen={false}
+                legend={
+                  <>
+                    <span className="text-gray-400">
+                      실적 이후 6개월 기준 입고예정 재고자산 (파일 존재 월만 표시)
+                    </span>
+                    <span className="text-gray-400">금액단위: 1위안</span>
+                  </>
+                }
+              >
+                {forecastInventoryBrandData && forecastInventoryMonths.length > 0 ? (
+                  <>
+                    <div className="mb-3 text-xs text-gray-500">
+                      표시 기간:{" "}
+                      {forecastInventoryMonths.length > 0
+                        ? `${forecastInventoryMonths[0]} ~ ${
+                            forecastInventoryMonths[forecastInventoryMonths.length - 1]
+                          }`
+                        : "데이터 없음"}
+                    </div>
+                    <ForecastInventoryTable
+                      data={forecastInventoryBrandData}
+                      months={forecastInventoryMonths}
+                    />
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center py-10">
+                    <p className="text-gray-500">입고예정 재고자산 데이터가 없습니다.</p>
                   </div>
                 )}
               </CollapsibleSection>

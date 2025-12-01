@@ -21,6 +21,15 @@ const MONTHS_2025 = [
   "2025.07", "2025.08", "2025.09", "2025.10", "2025.11", "2025.12"
 ];
 
+// 2025년 히트맵에는 26.04까지의 재고주수를 함께 표시
+const MONTHS_2025_WITH_FORECAST = [
+  ...MONTHS_2025,
+  "2026.01",
+  "2026.02",
+  "2026.03",
+  "2026.04",
+];
+
 const STOCK_WEEKS_ROWS = [
   { label: "전체주수", isHeader: true, indent: false, type: "total", hasHeatmap: false },
   { label: "ㄴ 주력상품", isHeader: false, indent: true, type: "total_core", hasHeatmap: true },
@@ -48,6 +57,16 @@ function getHeatmapStyle(weeks: number): React.CSSProperties {
   }
 }
 
+// daysInMonth에 값이 없는 월(26.01~26.04 등)은 캘린더 기준으로 일수 계산
+function getDaysInMonthFromYm(month: string): number {
+  const [yearStr, monthStr] = month.split(".");
+  const year = Number(yearStr);
+  const m = Number(monthStr);
+  if (!year || !m) return 30; // 안전한 기본값
+  // JS Date: month는 1월=1 기준에서 마지막 날 구하기 위해 (year, m, 0)
+  return new Date(year, m, 0).getDate();
+}
+
 export default function StockWeeksTable({ 
   inventoryData, 
   salesData, 
@@ -55,7 +74,7 @@ export default function StockWeeksTable({
   stockWeek,
   year 
 }: StockWeeksTableProps) {
-  const months = year === "2024" ? MONTHS_2024 : MONTHS_2025;
+  const months = year === "2024" ? MONTHS_2024 : MONTHS_2025_WITH_FORECAST;
   
   const calculateWeeks = (inventory: number, sales: number, days: number): { display: string; value: number } => {
     if (sales === 0) {
@@ -82,9 +101,9 @@ export default function StockWeeksTable({
   const getCellData = (month: string, rowType: string): { display: string; value: number } => {
     const invData = inventoryData[month];
     const slsData = salesData[month];
-    const days = daysInMonth[month];
+    const days = daysInMonth[month] || getDaysInMonthFromYm(month);
 
-    if (!invData || !slsData || !days) {
+    if (!invData || !slsData) {
       return { display: "-", value: -1 };
     }
 
@@ -97,6 +116,18 @@ export default function StockWeeksTable({
 
     const orSalesCore = invData.OR_sales_core || 0;
     const orSalesOutlet = invData.OR_sales_outlet || 0;
+
+    // forecast 월에서는 전체주수(전체/주력/아울렛)만 사용하고
+    // 대리상/창고 관련 주수는 계산하지 않으므로 공백으로 표시
+    const isForecast = slsData.isForecast;
+    if (
+      isForecast &&
+      rowType !== "total" &&
+      rowType !== "total_core" &&
+      rowType !== "total_outlet"
+    ) {
+      return { display: "", value: -1 };
+    }
 
     // 모든 데이터는 원 단위로 저장되어 있음
     const retailStockCore = calculateRetailStock(orSalesCore, days);

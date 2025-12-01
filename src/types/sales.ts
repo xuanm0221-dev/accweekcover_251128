@@ -84,6 +84,31 @@ export interface InventorySummaryData {
   daysInMonth: { [month: string]: number };
 }
 
+// ========== 입고예정 재고자산(Forecast Inventory) 타입 ==========
+
+// 월별 입고예정 재고자산 데이터 (아이템별 금액)
+export interface ForecastInventoryMonthData {
+  Shoes?: number;
+  Headwear?: number;
+  Bag?: number;
+  Acc_etc?: number;
+}
+
+// 브랜드별 입고예정 재고자산 데이터 (월 → 아이템별 금액)
+export interface ForecastInventoryData {
+  [month: string]: ForecastInventoryMonthData; // 예: "2025.11"
+}
+
+// 전체 입고예정 재고자산 요약 데이터 구조
+export interface ForecastInventorySummaryData {
+  brands: {
+    MLB: ForecastInventoryData;
+    "MLB KIDS": ForecastInventoryData;
+    DISCOVERY: ForecastInventoryData;
+  };
+  months: string[]; // 존재하는 월만 포함 (예: ["2025.11", "2025.12", "2026.01"])
+}
+
 // ========== 공통 타입 ==========
 
 // 아이템 탭 타입

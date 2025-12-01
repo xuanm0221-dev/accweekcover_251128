@@ -61,12 +61,31 @@ const MONTHS_2025 = [
   "2025.07", "2025.08", "2025.09", "2025.10", "2025.11", "2025.12"
 ];
 
+// 2025~2026년 월 목록 (forecast 25.11~26.04까지 포함)
+const MONTHS_2025_WITH_FORECAST = [
+  ...MONTHS_2025,
+  "2026.01",
+  "2026.02",
+  "2026.03",
+  "2026.04",
+];
+
 // 채널 라벨
 const CHANNEL_LABELS: Record<ChannelTab, string> = {
   ALL: "전체",
   FRS: "대리상",
   창고: "창고",
 };
+
+// daysInMonth에 값이 없는 월(26.01~26.04 등)은 캘린더 기준으로 일수 계산
+function getDaysInMonthFromYm(month: string): number {
+  const [yearStr, monthStr] = month.split(".");
+  const year = Number(yearStr);
+  const m = Number(monthStr);
+  if (!year || !m) return 30; // 안전한 기본값
+  // JS Date: month는 1월=1 기준에서 마지막 날 구하기 위해 (year, m, 0)
+  return new Date(year, m, 0).getDate();
+}
 
 // 상품 타입 탭 타입
 type ProductTypeTab = "전체" | "주력" | "아울렛";
@@ -147,14 +166,14 @@ export default function StockWeeksChart({
 
   // 단일 아이템 차트 데이터 생성 (상품 타입 탭에 따라 계산)
   const singleItemChartData = useMemo(() => {
-    return MONTHS_2025.map((month) => {
+    return MONTHS_2025_WITH_FORECAST.map((month) => {
       const invData = inventoryData[month];
       const slsData = salesData[month];
-      const days = daysInMonth[month];
+      const days = daysInMonth[month] || getDaysInMonthFromYm(month);
 
       if (!invData || !slsData || !days) {
         return {
-          month: month.replace("2025.", "") + "월",
+          month: month.replace("2025.", "").replace("2026.", "") + "월",
           합계: null,
           대리상: null,
         };
@@ -198,7 +217,7 @@ export default function StockWeeksChart({
       const weeksFRS = calculateWeeks(frsStock, frsSales, days);
 
       return {
-        month: month.replace("2025.", "") + "월",
+        month: month.replace("2025.", "").replace("2026.", "") + "월",
         합계: weeksTotal !== null ? parseFloat(weeksTotal.toFixed(1)) : null,
         대리상: weeksFRS !== null ? parseFloat(weeksFRS.toFixed(1)) : null,
       };
@@ -209,10 +228,10 @@ export default function StockWeeksChart({
   const allItemsChartData = useMemo(() => {
     if (!showAllItems || !allInventoryData || !allSalesData) return [];
 
-    return MONTHS_2025.map((month) => {
-      const days = daysInMonth[month];
+    return MONTHS_2025_WITH_FORECAST.map((month) => {
+      const days = daysInMonth[month] || getDaysInMonthFromYm(month);
       const dataPoint: Record<string, string | number | null> = {
-        month: month.replace("2025.", "") + "월",
+        month: month.replace("2025.", "").replace("2026.", "") + "월",
       };
 
       ITEM_TABS.forEach((itemTab) => {

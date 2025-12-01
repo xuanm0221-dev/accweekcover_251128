@@ -30,9 +30,6 @@ interface InventoryChartProps {
   setChannelTab: (tab: ChannelTab) => void;
 }
 
-// 월 목록
-const MONTHS = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
-
 // 색상 정의 (주력: 진한 계열, 아울렛: 연한 계열)
 const COLORS = {
   // 24년 (전년)
@@ -59,6 +56,30 @@ const CHANNEL_LABELS: Record<ChannelTab, string> = {
   ALL: "전체",
   FRS: "대리상",
   창고: "창고",
+};
+
+// ✅ 선택된 탭의 재고/판매에서 실제 존재하는 월 목록을 뽑아서 25.01~26.04 사용
+const getMonthsForChart = (
+  inventoryBrandData: InventoryBrandData,
+  salesBrandData: SalesBrandData,
+  selectedTab: ItemTab
+): string[] => {
+  const invItem = inventoryBrandData[selectedTab] || {};
+  const salesItem = salesBrandData[selectedTab] || {};
+
+  const monthSet = new Set<string>([
+    ...Object.keys(invItem),
+    ...Object.keys(salesItem),
+  ]);
+
+  return Array.from(monthSet)
+    .filter((m) => m >= "2025.01" && m <= "2026.04")
+    .sort((a, b) => {
+      const [ya, ma] = a.split(".").map(Number);
+      const [yb, mb] = b.split(".").map(Number);
+      if (ya !== yb) return ya - yb;
+      return ma - mb;
+    });
 };
 
 // 커스텀 Tooltip 컴포넌트
@@ -161,13 +182,32 @@ export default function InventoryChart({
   channelTab,
   setChannelTab,
 }: InventoryChartProps) {
+  const months = useMemo(
+    () => getMonthsForChart(inventoryBrandData, salesBrandData, selectedTab),
+    [inventoryBrandData, salesBrandData, selectedTab]
+  );
+
   // 채널별 재고 데이터 가져오기
-  const getChannelInventory = (invData: InventoryMonthData | undefined) => {
+  const getChannelInventory = (
+    invData: InventoryMonthData | undefined,
+    slsData?: SalesMonthData
+  ) => {
     if (!invData) return { core: 0, outlet: 0 };
 
-    // 창고재고 계산용 (직영재고 추정 필요하지만, 여기서는 단순히 본사재고 사용)
-    // 실제로는 창고 = 본사(HQ_OR) - 직영(OR판매 기반 추정)이지만
-    // 차트에서는 단순화하여 HQ_OR 사용
+    // ✅ forecast 월 처리
+    if (slsData?.isForecast) {
+      if (channelTab === "ALL") {
+        // 전체 탭: 전체 재고자산 막대는 계속 보여줌
+        return {
+          core: Math.round(invData.전체_core || 0),
+          outlet: Math.round(invData.전체_outlet || 0),
+        };
+      }
+      // 대리상/창고 탭: forecast 구간은 막대 없음
+      return { core: 0, outlet: 0 };
+    }
+
+    // (실적 구간) 채널별 분기
     switch (channelTab) {
       case "FRS":
         return {
@@ -193,6 +233,20 @@ export default function InventoryChart({
   const getChannelSales = (slsData: SalesMonthData | undefined) => {
     if (!slsData) return { core: 0, outlet: 0 };
 
+    // ✅ forecast 월 처리
+    if (slsData.isForecast) {
+      if (channelTab === "ALL") {
+        // 전체 탭: 전체 forecast 판매
+        return {
+          core: Math.round(slsData.전체_core || 0),
+          outlet: Math.round(slsData.전체_outlet || 0),
+        };
+      }
+      // 대리상/창고 탭: forecast 구간은 막대 없음
+      return { core: 0, outlet: 0 };
+    }
+
+    // (실적 구간) 채널별 분기
     switch (channelTab) {
       case "FRS":
         return {
@@ -213,45 +267,42 @@ export default function InventoryChart({
         };
     }
   };
-  // 차트 데이터 생성 (24년 막대 = 25년 판매매출, 25년 막대 = 25년 재고자산)
+  // 차트 데이터 생성 (전년 막대 = 판매매출, 당년 막대 = 재고자산 + forecast)
   const chartData = useMemo(() => {
-    return MONTHS.map((monthNum) => {
-      const month2025 = `2025.${monthNum}`;
-      
-      const invData2025 = inventoryBrandData[selectedTab]?.[month2025];
-      const slsData2025 = salesBrandData[selectedTab]?.[month2025];
+    return months.map((monthYm) => {
+      const invData = inventoryBrandData[selectedTab]?.[monthYm];
+      const slsData = salesBrandData[selectedTab]?.[monthYm];
 
-      // 24년 막대: 25년 판매매출 (채널별)
-      const prev = getChannelSales(slsData2025);
-      
-      // 25년 막대: 25년 재고자산 (채널별)
-      const curr = getChannelInventory(invData2025);
+      // “전년” 역할: 해당 월의 판매매출 (채널별)
+      const prev = getChannelSales(slsData);
+      // “당년” 역할: 해당 월의 재고자산 (채널별, forecast 포함)
+      const curr = getChannelInventory(invData, slsData);
+
+      const monthLabel = `${parseInt(monthYm.split(".")[1], 10)}월`;
 
       return {
-        month: `${parseInt(monthNum)}월`,
-        "0_재고자산_주력": curr.core,  // 25년 재고자산 주력 (먼저 표시) - 숫자 접두사로 순서 보장
-        "0_재고자산_아울렛": curr.outlet,  // 25년 재고자산 아울렛
-        "1_판매매출_주력": prev.core,  // 25년 판매매출 주력 (나중 표시)
-        "1_판매매출_아울렛": prev.outlet,  // 25년 판매매출 아울렛
+        month: monthLabel,
+        "0_재고자산_주력": curr.core,      // 재고자산 주력
+        "0_재고자산_아울렛": curr.outlet,  // 재고자산 아울렛
+        "1_판매매출_주력": prev.core,      // 판매매출 주력
+        "1_판매매출_아울렛": prev.outlet,  // 판매매출 아울렛
       };
     });
-  }, [inventoryBrandData, salesBrandData, selectedTab, channelTab]);
+  }, [months, inventoryBrandData, salesBrandData, selectedTab, channelTab]);
 
   // 판매매출 최대값 계산 (동적 Y축 범위 설정용)
   const maxSales = useMemo(() => {
     let max = 0;
-    MONTHS.forEach((monthNum) => {
-      const month2025 = `2025.${monthNum}`;
-      const slsData2025 = salesBrandData[selectedTab]?.[month2025];
-      if (slsData2025) {
-        const sales = getChannelSales(slsData2025);
+    months.forEach((monthYm) => {
+      const slsData = salesBrandData[selectedTab]?.[monthYm];
+      if (slsData) {
+        const sales = getChannelSales(slsData);
         const total = sales.core + sales.outlet;
         if (total > max) max = total;
       }
     });
-    // 최대값의 1.3배로 설정 (여유 공간 확보), 최소 100M
     return Math.max(Math.ceil(max * 1.3), 100);
-  }, [salesBrandData, selectedTab, channelTab]);
+  }, [months, salesBrandData, selectedTab, channelTab]);
 
   const itemLabel = ITEM_LABELS[selectedTab];
   const channelLabel = CHANNEL_LABELS[channelTab];
@@ -267,7 +318,7 @@ export default function InventoryChart({
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <span className="text-green-500">📊</span>
-          월별 {channelLabel} 재고자산 추이 ({itemLabel}) - 24년 vs 25년
+          월별 {channelLabel} 재고자산 추이 ({itemLabel}) - 25년
         </h2>
         
         {/* 채널 탭 (ALL, 대리상, 창고) - 제목 바로 옆 */}
