@@ -126,6 +126,9 @@ export default function Home() {
             <code className="px-4 py-2 bg-gray-900 rounded-lg text-gray-300 font-mono text-sm">
               python scripts/preprocess_inventory.py
             </code>
+            <code className="px-4 py-2 bg-gray-900 rounded-lg text-gray-300 font-mono text-sm">
+              python scripts/preprocess_forecast_inventory.py
+            </code>
           </div>
         </div>
       </main>
