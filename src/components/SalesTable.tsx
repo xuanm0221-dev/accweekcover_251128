@@ -23,7 +23,9 @@ export default function SalesTable({ data, months }: SalesTableProps) {
       return monthData.OR_core + monthData.OR_outlet;
     }
 
-    return monthData[dataKey as keyof SalesMonthData] ?? 0;
+    // 'isForecast'는 boolean 타입이므로, 여기서는 숫자 필드만 사용하도록 안전하게 처리
+    const raw = monthData[dataKey as keyof SalesMonthData];
+    return typeof raw === "number" ? raw : 0;
   };
 
   const isForecastMonth = (month: string): boolean => {
