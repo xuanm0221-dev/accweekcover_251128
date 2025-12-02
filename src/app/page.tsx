@@ -15,7 +15,7 @@ export default function Home() {
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
             브랜드별 악세사리 재고주수 월별 현황을 한눈에 확인하세요.
             <br />
-            2024.01 ~ 2025.10 (총 22개월) 데이터 분석
+            2024.01 ~ 2025.11 (총 23개월) 데이터 분석
           </p>
         </div>
 
@@ -96,7 +96,7 @@ export default function Home() {
           <div className="card">
             <h3 className="text-lg font-semibold text-white mb-4">📊 데이터 범위</h3>
             <ul className="space-y-2 text-gray-400">
-              <li>• 분석 기간: 2024.01 ~ 2025.10 (22개월)</li>
+              <li>• 분석 기간: 2024.01 ~ 2025.11 (23개월)</li>
               <li>• 대상 브랜드: MLB, MLB KIDS, DISCOVERY</li>
               <li>• 대상 카테고리: 饰品 (악세사리)</li>
               <li>• 아이템: Shoes, Headwear, Bag, Acc_etc</li>
