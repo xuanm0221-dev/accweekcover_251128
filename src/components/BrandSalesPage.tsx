@@ -15,6 +15,7 @@ import {
   ForecastInventoryData,
   ActualArrivalSummaryData,
   ActualArrivalData,
+  StockWeekWindow,
 } from "@/types/sales";
 import Navigation from "./Navigation";
 import ItemTabs from "./ItemTabs";
@@ -50,6 +51,7 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
   const [growthRate, setGrowthRate] = useState<number>(105); // 성장률 (기본값 105%)
   const [forecastInventoryData, setForecastInventoryData] = useState<ForecastInventorySummaryData | null>(null);
   const [actualArrivalData, setActualArrivalData] = useState<ActualArrivalSummaryData | null>(null);
+  const [stockWeekWindow, setStockWeekWindow] = useState<StockWeekWindow>(1);
   
   // 특정 아이템의 stockWeek 변경 핸들러
   const handleStockWeekChange = (itemTab: ItemTab, value: number) => {
@@ -258,6 +260,7 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
                 daysInMonth={inventoryData.daysInMonth}
                 stockWeeks={stockWeeks}
                 onStockWeekChange={handleStockWeekChange}
+                stockWeekWindow={stockWeekWindow}
               />
             )}
 
@@ -271,6 +274,8 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
                 setShowAllItems={setShowAllItemsInChart}
                 growthRate={growthRate}
                 setGrowthRate={setGrowthRate}
+                stockWeekWindow={stockWeekWindow}
+                setStockWeekWindow={setStockWeekWindow}
               />
             </div>
 
@@ -288,6 +293,7 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
                 allInventoryData={inventoryBrandData}
                 allSalesData={salesBrandData}
                 channelTab={channelTab}
+                stockWeekWindow={stockWeekWindow}
               />
             )}
 
@@ -355,6 +361,7 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
                   daysInMonth={inventoryData.daysInMonth}
                   stockWeek={stockWeeks[selectedTab]}
                   year="2025"
+                  stockWeekWindow={stockWeekWindow}
                 />
 
                 {/* 재고주수 계산식 범례 */}
@@ -406,6 +413,7 @@ export default function BrandSalesPage({ brand, title }: BrandSalesPageProps) {
                   daysInMonth={inventoryData.daysInMonth}
                   stockWeek={stockWeeks[selectedTab]}
                   year="2024"
+                  stockWeekWindow={stockWeekWindow}
                 />
               </div>
             )}

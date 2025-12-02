@@ -143,6 +143,9 @@ export interface ActualArrivalSummaryData {
 // 아이템 탭 타입
 export type ItemTab = "전체" | "Shoes" | "Headwear" | "Bag" | "Acc_etc";
 
+// 재고주수 계산 기준 기간 (1개월 / 2개월 / 3개월)
+export type StockWeekWindow = 1 | 2 | 3;
+
 // 채널 탭 타입 (차트용)
 export type ChannelTab = "ALL" | "FRS" | "창고";
 

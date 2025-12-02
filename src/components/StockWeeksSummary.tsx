@@ -9,7 +9,8 @@ import {
   SalesBrandData,
   InventoryItemTabData,
   SalesItemTabData,
-  StockWeeksByItem
+  StockWeeksByItem,
+  StockWeekWindow,
 } from "@/types/sales";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ interface StockWeeksSummaryProps {
   daysInMonth: { [month: string]: number };
   stockWeeks: StockWeeksByItem;
   onStockWeekChange: (itemTab: ItemTab, value: number) => void;
+  stockWeekWindow: StockWeekWindow;
 }
 
 // 아이템 탭 라벨 및 아이콘
@@ -57,6 +59,31 @@ const MONTHS_2025 = Array.from({ length: 12 }, (_, i) => ({
   label: `${i + 1}월`,
 }));
 
+// "YYYY.MM"에서 이전 달 구하기 (예: 2025.03 -> 2025.02)
+function getPrevMonth(month: string): string {
+  const [yearStr, monthStr] = month.split(".");
+  let year = Number(yearStr);
+  let m = Number(monthStr);
+  if (m === 1) {
+    year -= 1;
+    m = 12;
+  } else {
+    m -= 1;
+  }
+  return `${year}.${String(m).padStart(2, "0")}`;
+}
+
+// 기준 월과 윈도우(1/2/3개월)에 따라 포함될 월 리스트 계산 (당월 포함, 과거로만 확장)
+function getWindowMonths(baseMonth: string, window: StockWeekWindow): string[] {
+  const months: string[] = [baseMonth];
+  let cur = baseMonth;
+  for (let i = 1; i < window; i++) {
+    cur = getPrevMonth(cur);
+    months.push(cur);
+  }
+  return months;
+}
+
 export default function StockWeeksSummary({
   brand,
   inventoryBrandData,
@@ -64,6 +91,7 @@ export default function StockWeeksSummary({
   daysInMonth,
   stockWeeks,
   onStockWeekChange,
+  stockWeekWindow,
 }: StockWeeksSummaryProps) {
   // 가장 최근 데이터가 있는 월 찾기
   const getLatestMonth = (): string => {
@@ -102,7 +130,6 @@ export default function StockWeeksSummary({
   ): { weeks: number; inventory: number } => {
     const invData = inventoryBrandData[itemTab]?.[month];
     const slsData = salesBrandData[itemTab]?.[month];
-    const days = daysInMonth[month] || 30;
 
     if (!invData || !slsData) {
       return { weeks: 0, inventory: 0 };
@@ -120,6 +147,36 @@ export default function StockWeeksSummary({
     const orSalesCore = invData.OR_sales_core || 0;
     const orSalesOutlet = invData.OR_sales_outlet || 0;
 
+    // 윈도우(1/2/3개월)에 따른 매출/일수 집계
+    const windowMonths = getWindowMonths(month, stockWeekWindow);
+    let totalSalesCoreWindow = 0;
+    let totalSalesOutletWindow = 0;
+    let frsSalesCoreWindow = 0;
+    let frsSalesOutletWindow = 0;
+    let warehouseSalesWindow = 0;
+    let orSalesOutletWindow = 0;
+    let daysWindow = 0;
+
+    windowMonths.forEach((m) => {
+      const sd = salesBrandData[itemTab]?.[m];
+      const id = inventoryBrandData[itemTab]?.[m];
+      const d = daysInMonth[m] || 30;
+      daysWindow += d;
+      if (sd) {
+        totalSalesCoreWindow += sd.전체_core || 0;
+        totalSalesOutletWindow += sd.전체_outlet || 0;
+        frsSalesCoreWindow += sd.FRS_core || 0;
+        frsSalesOutletWindow += sd.FRS_outlet || 0;
+        warehouseSalesWindow +=
+          (sd.FRS_core || 0) + (sd.OR_core || 0) + (sd.OR_outlet || 0);
+      }
+      if (id) {
+        orSalesOutletWindow += id.OR_sales_outlet || 0;
+      }
+    });
+
+    const days = daysWindow || (daysInMonth[month] || 30);
+
     // 모든 데이터는 원 단위로 저장되어 있음
     const retailStockCore = calculateRetailStock(orSalesCore, days, itemTab);
     const retailStockOutlet = calculateRetailStock(orSalesOutlet, days, itemTab);
@@ -127,12 +184,10 @@ export default function StockWeeksSummary({
     const warehouseStockCore = hqOrStockCore - retailStockCore;
     const warehouseStockOutlet = hqOrStockOutlet - retailStockOutlet;
 
-    // 예상 구간에서는 전체 필드가 있으면 그것을 사용
-    const totalSalesFromField = slsData.전체 !== undefined ? slsData.전체 : null;
-    const totalSalesCore = slsData.전체_core || 0;
-    const totalSalesOutlet = slsData.전체_outlet || 0;
-    const frsSalesCore = slsData.FRS_core || 0;
-    const frsSalesOutlet = slsData.FRS_outlet || 0;
+    const totalSalesCore = totalSalesCoreWindow;
+    const totalSalesOutlet = totalSalesOutletWindow;
+    const frsSalesCore = frsSalesCoreWindow;
+    const frsSalesOutlet = frsSalesOutletWindow;
 
     let weeks = 0;
     let inventory = 0;
@@ -143,9 +198,7 @@ export default function StockWeeksSummary({
         const totalStock = totalStockFromField !== null 
           ? totalStockFromField 
           : totalStockCore + totalStockOutlet;
-        const totalSales = totalSalesFromField !== null 
-          ? totalSalesFromField 
-          : totalSalesCore + totalSalesOutlet;
+        const totalSales = totalSalesCore + totalSalesOutlet;
         weeks = calculateWeeks(totalStock, totalSales, days);
         inventory = totalStock;
         break;
@@ -171,7 +224,7 @@ export default function StockWeeksSummary({
         break;
       case "warehouse":
         // 창고재고주수(전체) = 창고재고(전체) ÷ [(주력상품 대리상판매 + 주력상품 직영판매 + 아울렛상품 직영판매) ÷ 일수 × 7]
-        const warehouseSales = frsSalesCore + (slsData.OR_core || 0) + (slsData.OR_outlet || 0);
+        const warehouseSales = warehouseSalesWindow;
         weeks = calculateWeeks(warehouseStockCore + warehouseStockOutlet, warehouseSales, days);
         inventory = warehouseStockCore + warehouseStockOutlet;
         break;
@@ -183,7 +236,7 @@ export default function StockWeeksSummary({
         // 본사물류재고 아울렛: 본사재고(HQ_OR_outlet)를 직접 사용 (본사물류재고 아님)
         // 직영판매(OR_sales)만 사용 (대리상판매 제외)
         // 모든 데이터는 원 단위로 저장되어 있음
-        weeks = calculateWeeks(hqOrStockOutlet, orSalesOutlet, days);
+        weeks = calculateWeeks(hqOrStockOutlet, orSalesOutletWindow, days);
         inventory = hqOrStockOutlet;
         break;
       case "retail_core":

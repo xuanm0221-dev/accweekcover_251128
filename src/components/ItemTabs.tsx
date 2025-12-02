@@ -1,6 +1,6 @@
 "use client";
 
-import { ItemTab, ITEM_TABS, Brand, BRANDS } from "@/types/sales";
+import { ItemTab, ITEM_TABS, Brand, BRANDS, StockWeekWindow } from "@/types/sales";
 import { cn } from "@/lib/utils";
 
 interface ItemTabsProps {
@@ -13,6 +13,9 @@ interface ItemTabsProps {
   // 성장률 관련 props
   growthRate: number;
   setGrowthRate: (value: number) => void;
+  // 재고주수 계산 기간 (1/2/3개월)
+  stockWeekWindow: StockWeekWindow;
+  setStockWeekWindow: (value: StockWeekWindow) => void;
 }
 
 export default function ItemTabs({ 
@@ -23,6 +26,8 @@ export default function ItemTabs({
   setShowAllItems,
   growthRate,
   setGrowthRate,
+  stockWeekWindow,
+  setStockWeekWindow,
 }: ItemTabsProps) {
   // 현재 브랜드의 색상 정보 가져오기
   const brandInfo = BRANDS.find(b => b.key === brand);
@@ -69,34 +74,61 @@ export default function ItemTabs({
         <span>재고주수 한번에 보기</span>
       </button>
 
-      {/* 성장률 입력 필드 */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 shadow-sm">
+      {/* 성장률 + 재고주수 기준 기간 */}
+      <div className="flex flex-wrap items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 shadow-sm">
+        {/* 성장률 입력 필드 */}
         <div className="flex items-center gap-2">
-          <span className="text-blue-600 text-lg">📈</span>
-          <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
-            성장률
-          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-blue-600 text-lg">📈</span>
+            <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+              성장률
+            </label>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              value={growthRate}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value);
+                if (!isNaN(value) && value > 0) {
+                  setGrowthRate(value);
+                }
+              }}
+              className="w-16 px-3 py-1.5 bg-white border border-blue-300 rounded-md text-sm font-semibold text-gray-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              min="1"
+              step="1"
+              title="전년동월 대비 성장률 (%)"
+            />
+            <span className="text-xs text-gray-500 font-medium">%</span>
+          </div>
+          <span className="text-xs text-gray-500 ml-1" title="전년동월 대비 성장률">
+            (전년동월 대비)
+          </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <input
-            type="number"
-            value={growthRate}
-            onChange={(e) => {
-              const value = parseFloat(e.target.value);
-              if (!isNaN(value) && value > 0) {
-                setGrowthRate(value);
-              }
-            }}
-            className="w-16 px-3 py-1.5 bg-white border border-blue-300 rounded-md text-sm font-semibold text-gray-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-            min="1"
-            step="1"
-            title="전년동월 대비 성장률 (%)"
-          />
-          <span className="text-xs text-gray-500 font-medium">%</span>
+
+        {/* 재고주수 계산 기준 기간 탭 */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-600 whitespace-nowrap">
+            재고주수 기준:
+          </span>
+          <div className="flex rounded-lg bg-white/60 border border-blue-200 overflow-hidden">
+            {[1, 2, 3].map((window) => (
+              <button
+                key={window}
+                type="button"
+                onClick={() => setStockWeekWindow(window as StockWeekWindow)}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium transition-colors",
+                  window === stockWeekWindow
+                    ? "bg-blue-600 text-white"
+                    : "text-blue-700 hover:bg-blue-100"
+                )}
+              >
+                {window}개월
+              </button>
+            ))}
+          </div>
         </div>
-        <span className="text-xs text-gray-500 ml-1" title="전년동월 대비 성장률">
-          (전년동월 대비)
-        </span>
       </div>
     </div>
   );
