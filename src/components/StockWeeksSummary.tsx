@@ -214,7 +214,7 @@ export default function StockWeeksSummary({
           
           {/* StockWeek 입력 (작은 버전) */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500">stock week:</span>
+            <span className="text-xs text-gray-500">직영판매예정재고:</span>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => {
